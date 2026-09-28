@@ -10,12 +10,19 @@ type Challenge = {
   secret?: string;
   otpAuthUri?: string;
 };
+type Authenticated = { nextStep: "AUTHENTICATED"; session: Session };
 export function Auth() {
   const navigate = useNavigate();
   const [minimumPasswordLength, setMinimumPasswordLength] = useState(12);
+  const [localPasswordLogin, setLocalPasswordLogin] = useState(false);
   useEffect(() => {
-    api<{ minimumPasswordLength: number }>("/auth/policy")
-      .then((p) => setMinimumPasswordLength(p.minimumPasswordLength))
+    api<{ minimumPasswordLength: number; authenticationMode: string }>(
+      "/auth/policy",
+    )
+      .then((p) => {
+        setMinimumPasswordLength(p.minimumPasswordLength);
+        setLocalPasswordLogin(p.authenticationMode === "PASSWORD_LOCAL");
+      })
       .catch(() => {});
   }, []);
   const [token] = useState(
@@ -78,14 +85,17 @@ export function Auth() {
               ? "Ссылка приглашения недействительна."
               : "Пароль должен занимать не более 72 байт.",
           );
-        const c = await api<Challenge>(
+        const c = await api<Challenge | Authenticated>(
           step === "login" ? "/auth/login" : "/auth/invitations/accept",
           "POST",
           step === "login" ? { email, password } : { token, password, name },
         );
-        setChallenge(c);
         setPassword("");
-        setStep(c.nextStep === "ENROLL" ? "enroll" : "verify");
+        if ("session" in c) enter(c.session);
+        else {
+          setChallenge(c);
+          setStep(c.nextStep === "ENROLL" ? "enroll" : "verify");
+        }
       } else if (step === "verify")
         enter(
           await api<Session>("/auth/mfa/verify", "POST", {
@@ -151,7 +161,9 @@ export function Auth() {
           </p>
           <div className="pills">
             {[
-              "Вход только с 2FA",
+              localPasswordLogin
+                ? "Локальный вход по паролю"
+                : "Вход только с 2FA",
               "Доступ по приглашению",
               "Журнал всех решений",
             ].map((v, i) => (
@@ -334,7 +346,7 @@ export function Auth() {
             <button className="button" disabled={busy}>
               {busy
                 ? "Подождите…"
-                : step === "verify"
+                : step === "verify" || (step === "login" && localPasswordLogin)
                   ? "Войти"
                   : step === "enroll"
                     ? "Подтвердить"
@@ -365,7 +377,9 @@ export function Auth() {
           )}
         </form>
         <small className="auth-foot">
-          Без 2FA вход в панель закрыт для всех ролей
+          {localPasswordLogin
+            ? "Локальный режим · подтверждение OTP временно отключено"
+            : "Без 2FA вход в панель закрыт для всех ролей"}
         </small>
       </section>
     </main>

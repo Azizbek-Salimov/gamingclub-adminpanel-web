@@ -59,7 +59,7 @@ test("public login: responsive, local assets, no credentials stored", async ({
     );
   expect(broken).toEqual([]);
 });
-test("real backend: invitation, MFA, refresh, category and game CRUD with images", async ({
+test("real backend: invitation, configured auth, refresh, category and game CRUD with images", async ({
   page,
   request,
 }) => {
@@ -83,7 +83,12 @@ test("real backend: invitation, MFA, refresh, category and game CRUD with images
   )![0];
   let access = "";
   page.on("response", async (r) => {
-    if (/\/auth\/(mfa\/enroll|refresh|mfa\/verify)$/.test(r.url()) && r.ok()) {
+    if (
+      /\/auth\/(invitations\/accept|login|mfa\/enroll|refresh|mfa\/verify)$/.test(
+        r.url(),
+      ) &&
+      r.ok()
+    ) {
       const v = await r.json();
       access = v.accessToken || v.session?.accessToken || access;
     }
@@ -95,21 +100,28 @@ test("real backend: invitation, MFA, refresh, category and game CRUD with images
   await page
     .getByLabel("Пароль", { exact: true })
     .fill("QA-" + randomBytes(18).toString("base64url"));
+  const policy = await (
+    await request.get("/api/operations/v1/auth/policy")
+  ).json();
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Подключите приложение" }),
-  ).toBeVisible();
-  const secret = (await page.locator(".enrollment code").innerText()).trim();
-  await expect(
-    page.getByAltText("QR-код для подключения двухфакторной проверки"),
-  ).toBeVisible();
-  await page
-    .getByLabel("Код из приложения", { exact: true })
-    .fill(totp(secret));
-  await page.getByRole("button", { name: "Подтвердить", exact: true }).click();
-  await expect(page.locator(".recovery-codes code")).toHaveCount(10);
-  await page.getByLabel("Я сохранил резервные коды").check();
-  await page.getByRole("button", { name: "Перейти в панель" }).click();
+  if (policy.mfaRequired) {
+    await expect(
+      page.getByRole("heading", { name: "Подключите приложение" }),
+    ).toBeVisible();
+    const secret = (await page.locator(".enrollment code").innerText()).trim();
+    await expect(
+      page.getByAltText("QR-код для подключения двухфакторной проверки"),
+    ).toBeVisible();
+    await page
+      .getByLabel("Код из приложения", { exact: true })
+      .fill(totp(secret));
+    await page
+      .getByRole("button", { name: "Подтвердить", exact: true })
+      .click();
+    await expect(page.locator(".recovery-codes code")).toHaveCount(10);
+    await page.getByLabel("Я сохранил резервные коды").check();
+    await page.getByRole("button", { name: "Перейти в панель" }).click();
+  }
   await expect(
     page.getByRole("heading", { name: "Главная", exact: true }),
   ).toBeVisible();

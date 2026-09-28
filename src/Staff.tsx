@@ -55,7 +55,7 @@ export function Team() {
       <div className="page-heading">
         <div>
           <h1>Команда и роли</h1>
-          <p>Сотрудники платформы · доступ по приглашению и 2FA</p>
+          <p>Сотрудники платформы · доступ по приглашению</p>
         </div>
       </div>
       {error && <Notice error>{error}</Notice>}
