@@ -898,9 +898,10 @@ export function Games({ canWrite }: { canWrite: boolean }) {
                       value={selected.genre}
                       onChange={(e) => change({ genre: e.target.value })}
                     />
-                    <label className="field">
-                      Возраст
+                    <div className="field">
+                      <label htmlFor="game-age-rating">Возраст</label>
                       <select
+                        id="game-age-rating"
                         required
                         value={selected.ageRating}
                         onChange={(e) => change({ ageRating: e.target.value })}
@@ -912,7 +913,7 @@ export function Games({ canWrite }: { canWrite: boolean }) {
                           <option key={v}>{v}</option>
                         ))}
                       </select>
-                    </label>
+                    </div>
                     <div className="field">
                       <label>Категории</label>
                       {cats
