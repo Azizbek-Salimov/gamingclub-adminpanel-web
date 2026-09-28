@@ -57,3 +57,5 @@ ADMIN_E2E_LOCAL=1 npm test
 `npm run build` создаёт `dist/`. Раздавайте SPA с fallback на index.html и проксируйте `/api/operations/` на admin backend **на том же origin**. Пример nginx — `deploy/nginx.conf`. В контейнерном варианте `docker build -t booking-admin-web .`; backend должен быть доступен по DNS `admin:8084` в общей Docker-сети. Настройте HTTPS и ADMIN_ORIGIN на фактический домен; Secure cookie backend по умолчанию включена. Публичный backend bridge не должен быть доступен извне.
 
 Секрет HMAC и ключ шифрования существуют только на серверах. Фронтенду они не нужны. Реальный production-домен, TLS, SMTP и развёртывание в этой поставке не настраивались.
+
+Формы приглашения и восстановления читают минимальную длину пароля из GET /api/operations/v1/auth/policy. По умолчанию требуется 12 символов; локальный backend-профиль local допускает 9. MFA обязательна в обоих режимах. Пользовательские пароли не входят в исходный код.

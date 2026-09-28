@@ -12,6 +12,12 @@ type Challenge = {
 };
 export function Auth() {
   const navigate = useNavigate();
+  const [minimumPasswordLength, setMinimumPasswordLength] = useState(12);
+  useEffect(() => {
+    api<{ minimumPasswordLength: number }>("/auth/policy")
+      .then((p) => setMinimumPasswordLength(p.minimumPasswordLength))
+      .catch(() => {});
+  }, []);
   const [token] = useState(
     () => new URLSearchParams(location.hash.slice(1)).get("token") || "",
   );
@@ -225,11 +231,11 @@ export function Auth() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={step === "login" ? 1 : 12}
+              minLength={step === "login" ? 1 : minimumPasswordLength}
               hint={
                 step === "login"
                   ? undefined
-                  : "От 12 символов, максимум 72 байта."
+                  : `От ${minimumPasswordLength} символов, максимум 72 байта.`
               }
               aside={
                 step === "login" ? (
