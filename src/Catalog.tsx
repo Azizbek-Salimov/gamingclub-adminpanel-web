@@ -388,7 +388,8 @@ export function Categories({ canWrite }: { canWrite: boolean }) {
                         }}
                       />
                       <small className="hint">
-                        {file?.name || "PNG до 512 КБ, не больше 512 × 512."}
+                        {file?.name ||
+                          "JPG или PNG до 2 МБ. Автоматически уменьшим до 512 × 512."}
                       </small>
                     </div>
                     <div className="field">
@@ -637,7 +638,7 @@ export function Games({ canWrite }: { canWrite: boolean }) {
       setSelected(r);
       setDirty(false);
       if (file) {
-        const media = await upload(file);
+        const media = await upload(file, "GAME");
         r = await api<Game>(
           `/games/${r.id}/image`,
           "PUT",
@@ -819,7 +820,8 @@ export function Games({ canWrite }: { canWrite: boolean }) {
                           }}
                         />
                         <small className="hint">
-                          {file?.name || "PNG · до 512 КБ · 512 × 512"}
+                          {file?.name ||
+                            "JPG или PNG до 5 МБ. До 1600 пикселей по длинной стороне."}
                         </small>
                         {selected.imageId && (
                           <button

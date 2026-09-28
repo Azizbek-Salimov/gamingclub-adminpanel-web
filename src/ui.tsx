@@ -90,7 +90,7 @@ export function Status({ value }: { value: string }) {
 export function FileField({
   onFile,
   disabled,
-  label = "Загрузить PNG",
+  label = "Загрузить изображение",
 }: {
   onFile: (file: File) => void;
   disabled?: boolean;
@@ -103,7 +103,7 @@ export function FileField({
         aria-label={label}
         disabled={disabled}
         type="file"
-        accept="image/png"
+        accept="image/png,image/jpeg"
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) onFile(f);

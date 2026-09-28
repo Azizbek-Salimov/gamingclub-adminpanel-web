@@ -45,6 +45,14 @@ export type Page<T> = {
   version?: number;
 };
 const messages: Record<string, string> = {
+  ICON_SIZE_INVALID: "Иконка должна занимать не более 2 МБ.",
+  IMAGE_SIZE_INVALID: "Изображение превышает допустимый размер.",
+  IMAGE_FORMAT_INVALID:
+    "Файл повреждён или имеет неподдерживаемый формат. Нужен JPG или PNG.",
+  IMAGE_DIMENSIONS_INVALID:
+    "Изображение слишком большое по разрешению: максимум 40 мегапикселей и 16384 пикселя по стороне.",
+  IMAGE_PROCESSING_BUSY:
+    "Обрабатываются другие изображения. Попробуйте ещё раз.",
   INVALID_CREDENTIALS: "Неверная почта или пароль.",
   MFA_INVALID: "Неверный или уже использованный код.",
   INVALID_CODE: "Неверный или уже использованный код.",
@@ -72,8 +80,8 @@ export class ApiError extends Error {
           401: "Войдите в панель заново.",
           403: "Недостаточно прав.",
           409: "Конфликт данных: запись уже существует или используется.",
-          413: "Файл слишком большой. Максимум 512 КБ.",
-          415: "Нужен PNG, не больше 512 × 512.",
+          413: "Файл слишком большой. Иконки — до 2 МБ, обложки — до 5 МБ.",
+          415: "Нужен корректный JPG или PNG.",
           429: "Слишком много попыток. Подождите минуту.",
         }[status] ||
         `Запрос не выполнен (${status}, ${code}).`,
@@ -193,11 +201,19 @@ export async function media(id: string) {
   if (!r.ok) throw new ApiError(r.status, "IMAGE_UNAVAILABLE");
   return URL.createObjectURL(await r.blob());
 }
-export async function upload(file: File) {
-  if (file.size > 524288) throw new Error("Максимальный размер — 512 КБ.");
+export async function upload(file: File, purpose: "ICON" | "GAME" = "ICON") {
+  const max = purpose === "ICON" ? 2 : 5;
+  if (!file.size || file.size > max * 1024 * 1024)
+    throw new Error(`Выберите файл до ${max} МБ.`);
+  if (file.type && !["image/png", "image/jpeg"].includes(file.type))
+    throw new Error("Нужен JPG или PNG.");
   const form = new FormData();
   form.append("file", file);
-  return api<{ mediaId: string }>("/category-icons", "POST", form);
+  return api<{ mediaId: string }>(
+    purpose === "ICON" ? "/category-icons" : "/game-images",
+    "POST",
+    form,
+  );
 }
 export async function allCategories() {
   const items: Category[] = [];

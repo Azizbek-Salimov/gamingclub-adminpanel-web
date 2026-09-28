@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import { createHmac, randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 const enabled = process.env.ADMIN_E2E_LOCAL === "1";
+const mailpit = process.env.ADMIN_MAILPIT_URL || "http://localhost:18026";
+const weburl = process.env.ADMIN_WEB_URL || "http://localhost:5175";
 const shots = process.env.ADMIN_SCREENSHOTS || "test-results/screenshots";
 function totp(secret: string) {
   let bits = "";
@@ -68,15 +70,13 @@ test("real backend: invitation, configured auth, refresh, category and game CRUD
     "Requires an explicitly enabled disposable local stack and QA invitation.",
   );
   await mkdir(shots, { recursive: true });
-  const inbox = await (
-    await request.get("http://localhost:18026/api/v1/messages")
-  ).json();
+  const inbox = await (await request.get(mailpit + "/api/v1/messages")).json();
   const message = inbox.messages.find((m: any) =>
     m.To.some((x: any) => x.Address === "admin-web-qa@example.test"),
   );
   expect(message).toBeTruthy();
   const mail = await (
-    await request.get("http://localhost:18026/api/v1/message/" + message.ID)
+    await request.get(mailpit + "/api/v1/message/" + message.ID)
   ).json();
   const invite = (mail.Text as string).match(
     /http[^\s]+\/invite#token=[^\s]+/,
@@ -164,15 +164,27 @@ test("real backend: invitation, configured auth, refresh, category and game CRUD
     x.fillText("QA", 10, 42);
     return c.toDataURL("image/png").split(",")[1];
   });
-  await page.getByLabel("Загрузить PNG", { exact: true }).setInputFiles({
-    name: "qa-icon.png",
-    mimeType: "image/png",
-    buffer: Buffer.from(png, "base64"),
-  });
+  const iconResponse = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/category-icons") && r.request().method() === "POST",
+  );
+  await page.getByLabel("Загрузить изображение", { exact: true }).setInputFiles(
+    process.env.ADMIN_ICON_FIXTURE || {
+      name: "qa-icon.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(png, "base64"),
+    },
+  );
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Категория сохранена." }),
   ).toBeVisible();
+  const iconUpload = await iconResponse;
+  expect(iconUpload.status()).toBe(201);
+  const iconMetadata = await iconUpload.json();
+  expect(Math.max(iconMetadata.width, iconMetadata.height)).toBeLessThanOrEqual(
+    512,
+  );
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Статус обновлён." }),
@@ -193,15 +205,28 @@ test("real backend: invitation, configured auth, refresh, category and game CRUD
   await page.getByLabel("Жанр", { exact: true }).fill("Симулятор");
   await page.getByLabel(category, { exact: true }).check();
   await page.getByLabel("Возраст", { exact: true }).selectOption("12+");
-  await page.getByLabel("Добавить обложку", { exact: true }).setInputFiles({
-    name: "qa-cover.png",
-    mimeType: "image/png",
-    buffer: Buffer.from(png, "base64"),
-  });
+  const coverResponse = page.waitForResponse(
+    (r) => r.url().endsWith("/game-images") && r.request().method() === "POST",
+  );
+  await page.getByLabel("Добавить обложку", { exact: true }).setInputFiles(
+    process.env.ADMIN_GAME_FIXTURE || {
+      name: "qa-cover.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(png, "base64"),
+    },
+  );
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Игра сохранена." }),
   ).toBeVisible();
+  const coverUpload = await coverResponse;
+  expect(coverUpload.status()).toBe(201);
+  const coverMetadata = await coverUpload.json();
+  expect(
+    Math.max(coverMetadata.width, coverMetadata.height),
+  ).toBeLessThanOrEqual(1600);
+  if (process.env.ADMIN_GAME_FIXTURE)
+    expect(coverMetadata.contentType).toBe("image/jpeg");
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "Статус обновлён." }),
@@ -252,8 +277,7 @@ test("real backend: invitation, configured auth, refresh, category and game CRUD
   };
   const list = await (
     await request.get(
-      "http://localhost:5175/api/operations/v1/games?q=" +
-        encodeURIComponent(game),
+      weburl + "/api/operations/v1/games?q=" + encodeURIComponent(game),
       { headers },
     )
   ).json();
