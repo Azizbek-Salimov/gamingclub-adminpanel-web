@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Link } from 'react-router';
+import { useEffect, useRef, useState } from "react";
 import { api, type Staff } from "./api";
 import { date, Empty, Notice, Status } from "./ui";
 import { TextField } from "./Field";
@@ -12,7 +13,7 @@ type Invite = {
   revoked_at: string | null;
 };
 type Event = {
-  id: number;
+  id: number | string;
   actor_id: string;
   action: string;
   target_id: string;
@@ -234,6 +235,13 @@ export function Team() {
   );
 }
 const actions: Record<string, string> = {
+  "club.publication.approved": "Заявка одобрена",
+  "club.publication.changes_requested": "Заявка возвращена с замечаниями",
+  "club.publication.rejected": "Заявка отклонена",
+  "club.submission.review_saved": "Проверка заявки сохранена",
+  "club.submission.withdrawn": "Заявка отозвана владельцем",
+  "club.blocked": "Клуб заблокирован",
+  "club.unblocked": "Блокировка клуба снята",
   CREATE: "Добавлена категория",
   UPDATE: "Изменена категория",
   PUBLISH: "Опубликована категория",
@@ -249,8 +257,12 @@ const actions: Record<string, string> = {
   GAME_UNPUBLISH: "Скрыта игра",
   GAME_ARCHIVE: "Игра перенесена в архив",
 };
-type CatalogEvent = Event & { before_data?: string; after_data?: string };
+type CatalogEvent = Event & { before_data?: string; after_data?: string; club_id?: string; reason?: string | null; event_id?: string };
 export function Audit() {
+  const [clubFilter, setClubFilter] = useState("");
+  const [actorFilter, setActorFilter] = useState("");
+  const [filters, setFilters] = useState({ clubId: "", actorId: "" });
+  const readSequence = useRef(0);
   const [rows, setRows] = useState<CatalogEvent[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -258,27 +270,25 @@ export function Audit() {
     [source, setSource] = useState("catalog-audit"),
     [selected, setSelected] = useState<CatalogEvent | null>(null);
   async function load(append = false) {
-    setBusy(true);
-    setError("");
+    const sequence=++readSequence.current;
+    setBusy(true);setError("");
     try {
-      const d = await api<CatalogEvent[]>(
-        "/" +
-          source +
-          (append && rows.length ? "?before=" + rows.at(-1)!.id : ""),
-      );
-      setRows((x) => (append ? [...x, ...d] : d));
-      setMore(d.length === 100);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+      const params=new URLSearchParams();
+      if(append&&rows.length)params.set("before",String(rows.at(-1)!.id));
+      if(source==="moderation-audit") {
+        if(filters.clubId)params.set("clubId",filters.clubId);
+        if(filters.actorId)params.set("actorId",filters.actorId);
+      }
+      const d=await api<CatalogEvent[]>("/"+source+(params.size?"?"+params:""));
+      if(sequence!==readSequence.current)return;
+      setRows(x=>append?[...x,...d]:d);setMore(d.length===100);
+    } catch(error) { if(sequence===readSequence.current)setError((error as Error).message); }
+    finally { if(sequence===readSequence.current)setBusy(false); }
   }
-  useEffect(() => {
-    setRows([]);
-    setSelected(null);
-    load();
-  }, [source]);
+  useEffect(()=>{
+    setRows([]);setSelected(null);setMore(true);void load();
+    return ()=>{++readSequence.current;};
+  },[source,filters]);
   const detail = (s?: string) => {
     if (!s) return "—";
     try {
@@ -308,6 +318,7 @@ export function Audit() {
           <div className="tabs">
             {[
               ["catalog-audit", "Каталог"],
+              ["moderation-audit", "Модерация"],
               ["audit", "Сотрудники и вход"],
             ].map(([v, t]) => (
               <button
@@ -319,6 +330,11 @@ export function Audit() {
               </button>
             ))}
           </div>
+          {source === "moderation-audit" && <form className="panel-pad audit-filters" onSubmit={e=>{e.preventDefault();setFilters({clubId:clubFilter.trim(),actorId:actorFilter.trim()});}}>
+            <label>Клуб (UUID)<input aria-label="Фильтр журнала по клубу" value={clubFilter} pattern="[0-9a-fA-F-]{36}" onChange={e=>setClubFilter(e.target.value)} /></label>
+            <label>Сотрудник (UUID)<input aria-label="Фильтр журнала по сотруднику" value={actorFilter} pattern="[0-9a-fA-F-]{36}" onChange={e=>setActorFilter(e.target.value)} /></label>
+            <button className="button secondary" disabled={busy}>Применить фильтры</button>
+          </form>}
           <div className="table-scroll">
             <table>
               <thead>
@@ -373,6 +389,11 @@ export function Audit() {
               <code>{selected.actor_id || "Система"}</code>
               <p className="sub">Объект</p>
               <code>{selected.target_id || "—"}</code>
+              {source === "moderation-audit" && <>
+                <p className="sub">Клуб</p><code>{selected.club_id || "—"}</code>
+                {selected.reason && <><p className="sub">Причина решения</p><p style={{whiteSpace:"pre-wrap"}}>{selected.reason}</p></>}
+                <p><Link className="text-button" to={`/review?submission=${encodeURIComponent(selected.target_id)}`}>Открыть заявку ›</Link></p>
+              </>}
               {source === "catalog-audit" && (
                 <>
                   <h3>Было</h3>

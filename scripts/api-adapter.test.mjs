@@ -142,6 +142,7 @@ test("version conflict retains status and server code for reconciliation UI", as
     (e) =>
       e instanceof ApiError &&
       e.status === 412 &&
-      e.code === "SUBMISSION_VERSION_CONFLICT",
+      e.code === "SUBMISSION_VERSION_CONFLICT" &&
+      !e.message.includes("другой сотрудник") && e.message.includes("Состояние заявки изменилось"),
   );
 });
