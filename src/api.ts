@@ -66,14 +66,31 @@ const messages: Record<string, string> = {
   PLATFORM_UNAVAILABLE: "Платформа временно недоступна. Попробуйте позже.",
   LAST_OWNER: "Нельзя отключить последнего владельца.",
   INVITE_INVALID: "Приглашение истекло или уже использовано.",
+  SUBMISSION_VERSION_CONFLICT:
+    "Заявку изменил другой сотрудник. Перечитайте данные перед продолжением.",
+  REVIEW_NOT_PENDING:
+    "Заявка уже обработана или отозвана владельцем. Обновите данные.",
+  MODERATION_REVIEW_INCOMPLETE:
+    "Проверьте все шесть разделов и устраните замечания перед одобрением.",
+  MODERATION_FEEDBACK_INVALID:
+    "Для возврата нужно хотя бы одно замечание; для одобрения список должен быть пустым.",
+  MODERATION_FEEDBACK_TARGET_INVALID:
+    "Замечание ссылается на отсутствующее поле, зал или фотографию.",
+  MODERATION_REASON_INVALID:
+    "Выберите причину отклонения заявки. Для варианта «Другое» добавьте пояснение.",
+  MODERATION_FEEDBACK_REQUIRED:
+    "Добавьте хотя бы одно замечание для возврата на исправление.",
+  CLUB_PERMISSION_DENIED:
+    "Нельзя проверять собственный клуб или заявку связанного с вами владельца.",
+  SUBMITTED_SNAPSHOT_NO_LONGER_READY:
+    "Данные заявки больше не готовы к публикации. Верните её владельцу для обновления.",
   INPUT_INVALID: "Проверьте заполненные поля.",
   INVALID_INPUT: "Проверьте заполненные поля.",
 };
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    public code: string,
-  ) {
+  public status: number;
+  public code: string;
+  constructor(status: number, code: string) {
     super(
       messages[code] ||
         {
@@ -86,6 +103,8 @@ export class ApiError extends Error {
         }[status] ||
         `Запрос не выполнен (${status}, ${code}).`,
     );
+    this.status = status;
+    this.code = code;
   }
 }
 let session: Session | null = null;
@@ -160,16 +179,18 @@ export function refresh() {
   }
   return refreshing;
 }
-export async function api<T>(
+export async function apiResponse<T>(
   path: string,
   method = "GET",
   body?: unknown,
-  version?: number,
+  version?: number | string,
   key?: string,
-): Promise<T> {
+): Promise<{ data: T; etag: string | null }> {
   const headers: Record<string, string> = {};
   if (method !== "GET") headers["Idempotency-Key"] = key || crypto.randomUUID();
-  if (version !== undefined) headers["If-Match"] = `"${version}"`;
+  if (version !== undefined)
+    headers["If-Match"] =
+      typeof version === "number" ? `"${version}"` : version;
   const init = {
     method,
     headers,
@@ -185,7 +206,32 @@ export async function api<T>(
     await refresh();
     r = await raw(path, init);
   }
-  return decode<T>(r);
+  const etag = r.headers.get("ETag");
+  return { data: await decode<T>(r), etag };
+}
+export async function api<T>(
+  path: string,
+  method = "GET",
+  body?: unknown,
+  version?: number | string,
+  key?: string,
+): Promise<T> {
+  return (await apiResponse<T>(path, method, body, version, key)).data;
+}
+export async function privateImage(path: string) {
+  let r = await raw(path);
+  if (r.status === 401) {
+    await refresh();
+    r = await raw(path);
+  }
+  if (!r.ok) await decode(r);
+  if (
+    !["image/png", "image/jpeg"].includes(
+      r.headers.get("Content-Type")?.split(";")[0] || "",
+    )
+  )
+    throw new Error("Не удалось загрузить фотографию.");
+  return URL.createObjectURL(await r.blob());
 }
 export async function logout() {
   await api("/auth/logout", "POST");
