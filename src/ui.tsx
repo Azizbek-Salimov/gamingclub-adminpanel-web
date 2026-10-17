@@ -72,6 +72,11 @@ export function ImagePreview({
   );
 }
 export const stateName: Record<string, string> = {
+  IN_REVIEW: "На проверке",
+  APPROVED: "Одобрено",
+  CHANGES_REQUESTED: "На исправлении",
+  WITHDRAWN: "Отозвано",
+  REJECTED: "Отклонено",
   DRAFT: "Черновик",
   PUBLISHED: "Опубликовано",
   UNPUBLISHED: "Скрыто",

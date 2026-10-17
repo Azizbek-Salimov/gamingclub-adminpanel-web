@@ -19,6 +19,7 @@ import {
 } from "./api";
 import { Auth } from "./Auth";
 import { Categories, Games } from "./Catalog";
+import { Moderation } from "./Moderation";
 import { Team, Audit } from "./Staff";
 import { Asset, Brand, Notice } from "./ui";
 import "./styles.css";
@@ -27,7 +28,7 @@ const nav: [string, [string, string, string, boolean?][]][] = [
     "РАБОТА",
     [
       ["/", "Главная", ""],
-      ["/review", "Клубы на проверке", "1", true],
+      ["/review", "Клубы на проверке", "1"],
       ["/access", "Заявки на доступ", "2", true],
       ["/complaints", "Жалобы на отзывы", "3", true],
       ["/disputes", "Споры по броням", "4", true],
@@ -187,9 +188,9 @@ function Dashboard() {
       <section className="panel panel-pad dashboard-note">
         <h3>Панель владельца платформы</h3>
         <p className="sub">
-          Каталог, сотрудники и вход в панель подключены к backend. Модерация
-          клубов, выручка, подписки и реклама будут доступны после подключения
-          соответствующих модулей.
+          Каталог, сотрудники и модерация клубов подключены к backend. Выручка,
+          подписки и реклама будут доступны после подключения соответствующих
+          модулей.
         </p>
       </section>
     </>
@@ -314,6 +315,7 @@ function App() {
           {error && <Notice error>{error}</Notice>}
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/review" element={<Moderation />} />
             <Route
               path="/categories"
               element={<Categories canWrite={owner} />}

@@ -7,7 +7,8 @@
     "dev": "vite --host 127.0.0.1 --port 5175",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4174",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:api": "node --test scripts/api-adapter.test.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",
