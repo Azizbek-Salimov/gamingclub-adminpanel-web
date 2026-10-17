@@ -119,6 +119,10 @@ export type MenuItem = {
   categoryIds: string[];
 };
 export type Submission = Card & {
+  ownerResponse?: string | null;
+  previousSubmissionId?: string | null;
+  previousDecision?: { rejectionReason: string | null; feedback: Feedback[] } | null;
+  changedSections?: string[];
   snapshot: {
     profile: {
       name: string;

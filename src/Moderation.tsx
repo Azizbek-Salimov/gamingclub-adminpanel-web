@@ -66,6 +66,7 @@ export function Moderation() {
   const [markets, setMarkets] = useState<{ id: string; code: string }[]>([]);
   const [page, setPage] = useState(0),
     [generation, setGeneration] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [queue, setQueue] = useState<Page<Card> | null>(null),
     [counts, setCounts] = useState<Counts | null>(null);
   const [error, setError] = useState(""),
@@ -83,6 +84,7 @@ export function Moderation() {
       .catch(() => {});
   }, []);
   useEffect(() => {
+    if (id) return;
     let current = true;
     setLoading(true);
     setError("");
@@ -100,6 +102,7 @@ export function Moderation() {
             setPage(Math.max(0, Math.ceil(q.total / 12) - 1));
           setQueue(q);
           setCounts(c);
+          setUpdatedAt(new Date().toLocaleTimeString("ru-RU", {timeZone: "Asia/Tashkent"}));
         }
       })
       .catch((e) => {
@@ -115,8 +118,14 @@ export function Moderation() {
     return () => {
       current = false;
     };
-  }, [state, query, page, sort, market, generation]);
+  }, [state, query, page, sort, market, generation, id]);
   const reload = useCallback(() => setGeneration((v) => v + 1), []);
+  useEffect(() => {
+    const refresh = () => { if (!id && document.visibilityState === "visible") reload(); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [id, reload]);
   const open = (submission?: string) =>
     setParams(submission ? { submission } : {});
   if (id)
@@ -134,7 +143,7 @@ export function Moderation() {
       <div className="page-heading">
         <div>
           <h1>Клубы на проверке</h1>
-          <p>Проверяйте данные клуба и залов перед публикацией</p>
+          <p>Проверяйте данные клуба и залов перед публикацией{updatedAt && ` · обновлено ${updatedAt}`}</p>
         </div>
         <button
           className="button secondary"
@@ -471,6 +480,7 @@ function ReviewDetail({
     [photo, setPhoto] = useState<string | null>(null);
   const pending = useRef<Pending | null>(null);
   const [discard, setDiscard] = useState<{ action: () => void } | null>(null);
+  const [conflictState, setConflictState] = useState<ReviewState | null>(null);
   const active = data?.state === "IN_REVIEW";
   const dirty =
     !!data &&
@@ -505,6 +515,7 @@ function ReviewDetail({
       const r = await moderation.get(id);
       apply(r.data, r.etag);
       setConflict(false);
+      setConflictState(null);
       setUncertain(false);
       pending.current = null;
     } catch (e) {
@@ -591,8 +602,10 @@ function ReviewDetail({
       ) {
         pending.current = null;
         setUncertain(false);
-        if (e.status === 412 || e.code === "REVIEW_NOT_PENDING")
+        if (e.status === 412 || e.code === "REVIEW_NOT_PENDING") {
           setConflict(true);
+          try { setConflictState((await moderation.get(id)).data.state); } catch { setConflictState(null); }
+        }
       } else setUncertain(true);
     } finally {
       setBusy(false);
@@ -681,9 +694,20 @@ function ReviewDetail({
           )}
         </Notice>
       )}
+      {data.ownerResponse && <div className="card">
+        <h2>Ответ владельца на предыдущее решение</h2>
+        <p className="moderation-reason">{data.ownerResponse}</p>
+        {data.previousSubmissionId && <button className="button secondary" onClick={()=>leave(()=>onOpen(data.previousSubmissionId!))}>Предыдущая заявка</button>}
+        {data.previousDecision && <>
+          {data.previousDecision.rejectionReason && <p>{data.previousDecision.rejectionReason}</p>}
+          {data.previousDecision.feedback.map((f,i)=><p key={i}>{fieldName(f.field)}: {f.message}</p>)}
+        </>}
+        <p>Изменённые разделы снимка: {data.changedSections?.map(s=>sections.find(([key])=>key===s)?.[1]||s).join(', ') || 'данные не изменены'}. Это сравнение данных, а не подтверждение исправления замечаний.</p>
+      </div>}
       {message && <Notice>{message}</Notice>}
       {(conflict || uncertain) && (
         <div className="review-recovery">
+          {conflictState && <span>Текущий статус: {states.find(([value]) => value === conflictState)?.[1] || conflictState}. Локальные отметки сохранены до перечитывания.</span>}
           {uncertain && (
             <>
               <span>
@@ -818,7 +842,7 @@ function ReviewDetail({
                     : data.state === "CHANGES_REQUESTED"
                       ? "Владелец получил замечания и может отправить новую заявку."
                       : data.state === "REJECTED"
-                        ? "Отказ окончательный: заявку нельзя исправить и отправить снова."
+                        ? "Отклонена эта редакция. Владелец может подать новую с ответом. Если есть предыдущая одобренная версия, она сохраняется."
                         : "Владелец отозвал заявку."}
                 </p>
                 {data.state === "REJECTED" && data.rejectionReason && (
@@ -946,7 +970,7 @@ function ReviewDetail({
                   </button>
                   <small>
                     Для дубликатов, недостоверных данных и клубов, которых нет.
-                    Отказ окончательный.
+                    Отказ относится к этой редакции. Блокировка клуба — отдельное решение.
                   </small>
                 </div>
               </div>
@@ -1120,12 +1144,9 @@ function ReviewDetail({
                   комментарий дословно
                 </small>
                 <div className="review-warning">
-                  <b>Отказ окончательный</b>
+                  <b>Будет отклонена эта редакция</b>
                   <p>
-                    Эту заявку нельзя исправить и отправить снова — для ошибок,
-                    которые можно поправить, используйте «Вернуть на
-                    исправление». Клуб и залы не публикуются; решение попадёт в
-                    журнал действий.
+                    Эта редакция не будет опубликована. Владелец сможет отправить новую с ответом. Если есть предыдущая одобренная версия, она и запрос её показа сохраняются. Для конкретных исправимых замечаний используйте «Вернуть на исправление». Решение попадёт в журнал. Блокировка клуба оформляется отдельно.
                   </p>
                 </div>
               </>

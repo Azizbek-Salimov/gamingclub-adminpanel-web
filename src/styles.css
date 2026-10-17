@@ -1971,3 +1971,7 @@ td select {
   padding: 0;
   accent-color: var(--red);
 }
+
+.audit-filters { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.audit-filters label { display: grid; gap: 6px; color: var(--sub); flex: 1 1 220px; }
+.audit-filters input { background: var(--field); border: 1px solid var(--line); border-radius: 8px; color: var(--text); padding: 10px; width: 100%; }
